@@ -1,0 +1,96 @@
+#!/bin/bash
+
+short_options="hD:A"
+long_options="help,domain=,ad"
+
+OK=0
+WARNING=1
+CRITICAL=2
+UNKNOWN=3
+
+DOMAIN=""
+ACTIVE_DIRECTORY="no"
+
+function usage() {
+        echo "Copyright (C) 2015 - 2018 by Andreas Maus <ecbeb08bb9f1b8e8f421fbf4c28e3033ecb13bc0@ypbind.de>"
+        echo "This program comes with ABSOLUTELY NO WARRANTY."
+        echo ""
+        echo "This program is distributed under the Terms of the GNU General"
+        echo "Public License Version 3. (http://www.gnu.org/copyleft/gpl.html)"
+        echo ""
+	echo "Usage: $0 [-h|--help] [-A|--ad] -d <domain>|--domain=<domain>"
+        echo ""
+        echo "  -h                      Shows (this) help."
+        echo "  --help"
+        echo ""
+        echo "  -A                      Check join for an active directory instead of a NT domain"
+        echo "  --ad                    Optional, default: ${ACTIVE_DIRECTORY}"
+        echo ""
+        echo "  -D <domain>             Set windows/SAMBA domain to check."
+        echo "  --domain=<domain>       Mandatory."
+        echo ""
+
+}
+
+optparse=$(getopt -o ${short_options} --long ${long_options} -n "$(basename $0)" -- "$@")
+if [ ${?} -ne 0 ]; then
+    echo "Can't parse command line"
+    exit ${UNKNOWN}
+fi
+
+eval set -- "${optparse}"
+
+while true; do
+    case "${1}" in
+        "-h"|"--help")
+        	usage
+        	exit 0
+        	;;
+	"-A"|"--ad")
+		ACTIVE_DIRECTORY="yes"
+		shift
+		;;
+	"-D"|"--domain")
+		DOMAIN="${2}"
+		shift
+		shift
+		;;
+	"--")
+		shift
+		break
+		;;
+	*)
+            echo "Unknown argument ${1}"
+            usage
+            exit 2
+            ;;
+    esac
+done
+
+if [ -z "${DOMAIN}" ]; then
+	echo "ERROR: Domain is mandatory"
+	echo ""
+	usage
+	exit ${UNKNOWN}
+fi
+
+which net >/dev/null 2>&1
+if [ ${?} -ne 0 ]; then
+	echo "Error: net not found or not executable"
+	exit ${UNKNOWN}
+fi
+
+if [ "${ACTIVE_DIRECTORY}" = "yes" ]; then
+	net ads testjoin ${DOMAIN} < /dev/null >/dev/null 2>&1
+else
+	net rpc testjoin ${DOMAIN} < /dev/null >/dev/null 2>&1
+fi
+
+if [ ${?} -ne 0 ]; then
+	echo "No valid domain join to domain ${DOMAIN}"
+	exit ${CRITICAL}
+else
+	echo "Valid domain join to domain ${DOMAIN}"
+	exit ${OK}
+fi
+
